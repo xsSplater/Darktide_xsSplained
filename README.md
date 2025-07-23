@@ -1,1 +1,1 @@
-# xsSplained — ваш гид по механикам Darktide.
+# xsSplained — ваш гид по игровым механикам Darktide.
