@@ -5,7 +5,6 @@ local ButtonPassTemplates = require("scripts/ui/pass_templates/button_pass_templ
 local UIFonts = require("scripts/managers/ui/ui_fonts")
 local UIFontSettings = require("scripts/managers/ui/ui_font_settings")
 local UIRenderer = require("scripts/managers/ui/ui_renderer")
-local DLS = get_mod("DarktideLocalServer")
 
 local bg_x_pad = 50
 local bg_y_pad = 10
@@ -25,39 +24,9 @@ text_style.size_addition = {
     -2 * bg_y_pad,
 }
 
--- URLs for images
-local strength_img = "https://wobin.github.io/SpideySense/images/arrow.png"
-local agility_img = "https://wobin.github.io/SpideySense/images/arrow2.png"
-local toughness_img = "https://wobin.github.io/SpideySense/images/arrow.png"
-local armor_img = "https://wobin.github.io/SpideySense/images/arrow2.png"
-
 local mechanics_btn_widgets = {}
 local mechanics_text_widget = nil
 local mechanics_current_idx = -1
-local loaded_images = {}
-
--- Function to load images
-local load_image = function(url, setting_name)
-    if loaded_images[url] then
-        return Promise.resolved(loaded_images[url])
-    end
-
-    if DLS then
-        local texture_dir = DLS.absolute_path("images")
-        local filename = string.match(url, "/([^/]+)$")
-        return DLS.get_image(texture_dir .. "/" .. filename):next(function(data)
-            loaded_images[url] = data.texture
-            return data.texture
-        end)
-    else
-        return Managers.backend:authenticate():next(function()
-            return Managers.url_loader:load_texture(url)
-        end):next(function(data)
-            loaded_images[url] = data.texture
-            return data.texture
-        end)
-    end
-end
 
 -- Handle accordion
 local live_accordion_anim = nil
@@ -159,7 +128,7 @@ mod:hook_require("scripts/ui/views/inventory_view/inventory_view_content_bluepri
     }
 
     blueprints.mechanics_text = {
-        size = { entry_size[1], 300 },
+        size = entry_size,
         pass_template = {
             {
                 pass_type = "texture",
@@ -180,27 +149,11 @@ mod:hook_require("scripts/ui/views/inventory_view/inventory_view_content_bluepri
                 },
             },
             {
-                pass_type = "texture",
-                style_id = "image",
-                value_id = "image",
-                style = {
-                    vertical_alignment = "top",
-                    horizontal_alignment = "left",
-                    size = { 200, 200 },
-                    offset = { bg_x_pad, bg_y_pad + 30, 3 },
-                    color = Color.white(255, true)
-                },
-                visibility_function = function(content, style)
-                    return content.image ~= nil
-                end
-            },
-            {
                 pass_type = "text",
                 value = missing_text,
                 value_id = "text",
                 style = text_style,
                 style_id = "text",
-                offset = { bg_x_pad, bg_y_pad + 220, 3 }
             },
             {
                 pass_type = "texture",
@@ -245,31 +198,26 @@ mod:hook_safe(CLASS.InventoryBackgroundView, "_setup_top_panel", function(self, 
             mechanics_key = "strength",
             mechanics_title = mod:localize("strength_title"),
             mechanics_txt = mod:localize("strength_description"),
-            image_url = strength_img
         },
         {
             mechanics_key = "agility",
             mechanics_title = mod:localize("agility_title"),
             mechanics_txt = mod:localize("agility_description"),
-            image_url = agility_img
         },
         {
             mechanics_key = "toughness",
             mechanics_title = mod:localize("toughness_title"),
             mechanics_txt = mod:localize("toughness_description"),
-            image_url = toughness_img
         },
         {
             mechanics_key = "armor_penetration",
             mechanics_title = mod:localize("armor_penetration_title"),
             mechanics_txt = mod:localize("armor_penetration_description"),
-            image_url = armor_img
         },
     }
 
     local num_layouts = 1
     local layout_data = {}
-    
     for i = 1, #mechanics_tuples do
         local tuple = mechanics_tuples[i]
         if mod:get(tuple.mechanics_key) then
@@ -279,13 +227,11 @@ mod:hook_safe(CLASS.InventoryBackgroundView, "_setup_top_panel", function(self, 
                 mechanics_idx = num_layouts,
                 mechanics_title = tuple.mechanics_title,
                 mechanics_txt = tuple.mechanics_txt,
-                image_url = tuple.image_url
             }
             layout_data[num_layouts] = mechanics_entry
             num_layouts = num_layouts + 1
         end
     end
-    
     layout_data[num_layouts] = {
         scenegraph_id = "mechanics_entry",
         widget_type = "mechanics_text",
@@ -337,23 +283,124 @@ mod:hook_safe(CLASS.InventoryBackgroundView, "_setup_top_panel", function(self, 
     self._top_panel:add_entry(mechanics_tab.display_name, cb, optional_update_function)
 end)
 
--- Animations and other hooks remain the same as in previous version
--- ...
+-- Animations
+local accordion_open_init = function(parent, ui_scenegraph, _scenegraph_definition, widget, textbox)
+    local anim_data = textbox.accordion_anim_data
+    textbox.offset[2] = anim_data.end_y
+    textbox.content.text = anim_data.text
+    textbox.style.text.text_color[1] = 0
+    textbox.visible = anim_data.end_height > 0
+end
 
--- Load images when showing text
-mod:hook_safe(CLASS.InventoryView, "_draw_widgets", function(self, dt, t, input_service, ui_renderer)
-    if mechanics_text_widget and mechanics_text_widget.content and mechanics_current_idx > 0 then
-        local content = mechanics_text_widget.content
-        if not content.image_loaded and mechanics_btn_widgets[mechanics_current_idx] then
-            local image_url = mechanics_btn_widgets[mechanics_current_idx].image_url
-            if image_url then
-                load_image(image_url, "mechanics_image"):next(function(texture)
-                    if content then
-                        content.image = texture
-                        content.image_loaded = true
-                    end
-                end)
-            end
-        end
+local accordion_open_update = function(parent, ui_scenegraph, scenegraph_definition, widgets, progress, textbox)
+    local anim_progress = math.easeOutCubic(progress)
+    textbox.alpha_multiplier = textbox.visible and anim_progress or 0
+    textbox.content.size[2] = textbox.accordion_anim_data.end_height * anim_progress
+end
+
+local accordion_text_appear_update = function(parent, ui_scenegraph, scenegraph_definition, widgets, progress, textbox)
+    textbox.style.text.text_color[1] = 255 * progress
+end
+
+local accordion_move_update = function(parent, ui_scenegraph, scenegraph_definition, widgets, progress, textbox)
+    local anim_progress = math.easeOutCubic(progress)
+
+    for i = 1, #widgets do
+        local widget = widgets[i]
+        local anim_data = widget.accordion_anim_data
+        widget.offset[2] = anim_data.start_y + anim_progress * (anim_data.end_y - anim_data.start_y)
     end
+end
+
+mod:hook(CLASS.InventoryView, "_create_sequence_animator", function(func, self, definitions)
+    definitions.animations = definitions.animations or {}
+    definitions.animations.mechanics_on_enter = {
+        {
+            name = "fade_in",
+            start_time = 0.0,
+            end_time = 0.6,
+            init = function(...)
+                for i = 1, #mechanics_btn_widgets do
+                    mechanics_btn_widgets[i].alpha_multiplier = 0
+                end
+            end,
+        },
+        {
+            name = "move",
+            start_time = 0.35,
+            end_time = 0.8,
+            update = function(parent, ui_scenegraph, scenegraph_definition, widgets, progress, params)
+                local anim_progress = math.easeOutCubic(progress)
+
+                local x_anim_distance_max = -50
+                local x_anim_distance = x_anim_distance_max - x_anim_distance_max * anim_progress
+                for i = 1, #mechanics_btn_widgets do
+                    local widget = mechanics_btn_widgets[i]
+                    widget.alpha_multiplier = anim_progress
+                    widget.offset[1] = x_anim_distance * (1.0 + (i - 1) * 0.25)
+                end
+            end,
+        },
+    }
+    definitions.animations.mechanics_accordion_open = {
+        {
+            name = "move",
+            start_time = 0.0,
+            end_time = 0.25,
+            update = accordion_move_update,
+        },
+        {
+            name = "open",
+            start_time = 0.1,
+            end_time = 0.25,
+            init = accordion_open_init,
+            update = accordion_open_update,
+        },
+        {
+            name = "text_appear",
+            start_time = 0.2,
+            end_time = 0.4,
+            update = accordion_text_appear_update,
+        },
+    }
+    definitions.animations.mechanics_accordion = {
+        {
+            name = "text_vanish",
+            start_time = 0.0,
+            end_time = 0.15,
+            update = function(parent, ui_scenegraph, scenegraph_definition, widgets, progress, textbox)
+                textbox.style.text.text_color[1] = 255 * (1.0 - math.easeOutCubic(progress))
+            end,
+        },
+        {
+            name = "close",
+            start_time = 0.0,
+            end_time = 0.3,
+            update = function(parent, ui_scenegraph, scenegraph_definition, widgets, progress, textbox)
+                local anim_progress = 1.0 - math.easeOutCubic(progress)
+                textbox.alpha_multiplier = textbox.visible and anim_progress or 0
+                textbox.content.size[2] = textbox.accordion_anim_data.start_height * anim_progress
+            end,
+        },
+        {
+            name = "move",
+            start_time = 0.2,
+            end_time = 0.5,
+            update = accordion_move_update,
+        },
+        {
+            name = "open",
+            start_time = 0.3,
+            end_time = 0.45,
+            init = accordion_open_init,
+            update = accordion_open_update,
+        },
+        {
+            name = "text_appear",
+            start_time = 0.4,
+            end_time = 0.6,
+            update = accordion_text_appear_update,
+        },
+    }
+    return func(self, definitions)
 end)
