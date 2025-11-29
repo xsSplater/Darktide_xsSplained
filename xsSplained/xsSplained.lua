@@ -1,4 +1,3 @@
-
 -- xsSplained.lua
 local mod = get_mod("xsSplained")
 
@@ -8,44 +7,6 @@ local UIFontSettings = require("scripts/managers/ui/ui_font_settings")
 local ButtonPassTemplates = require("scripts/ui/pass_templates/button_pass_templates")
 local UISoundEvents = require("scripts/settings/ui/ui_sound_events")
 
---[+ ++ЗАГРУЗКА ЦВЕТОВЫХ ФАЙЛОВ++ +]--
-local xss_KWords, xss_Numbers, xss_KWords_ru
-
-local function load_color_files()
-	local success_kwords, result_kwords = pcall(function()
-		return mod:io_dofile("xsSplained/Colors_Keywords_Numbers/xss_KWords")
-	end)
-	
-	local success_numbers, result_numbers = pcall(function()
-		return mod:io_dofile("xsSplained/Colors_Keywords_Numbers/xss_Numbers")
-	end)
-	
-	local success_kwords_ru, result_kwords_ru = pcall(function()
-		return mod:io_dofile("xsSplained/Colors_Keywords_Numbers/xss_KWords_ru")
-	end)
-	
-	xss_KWords = success_kwords and result_kwords or {}
-	xss_Numbers = success_numbers and result_numbers or {}
-	xss_KWords_ru = success_kwords_ru and result_kwords_ru or {}
-	
-	if success_kwords then
-		mod:info("✅ xss_KWords loaded successfully")
-	else
-		mod:warning("❌ Failed to load xss_KWords: " .. tostring(result_kwords))
-	end
-	
-	if success_numbers then
-		mod:info("✅ xss_Numbers loaded successfully") 
-	else
-		mod:warning("❌ Failed to load xss_Numbers: " .. tostring(result_numbers))
-	end
-	
-	if success_kwords_ru then
-		mod:info("✅ xss_KWords_ru loaded successfully")
-	else
-		mod:warning("❌ Failed to load xss_KWords_ru: " .. tostring(result_kwords_ru))
-	end
-end
 
 --[+ ++ЗАГРУЗКА ОПИСАНИЙ МЕХАНИК++ +]--
 local ingame_descriptions = {}
@@ -57,9 +18,9 @@ local function load_mechanics_descriptions()
 	
 	if success and result then
 		ingame_descriptions = result
-		mod:info("✅ Mechanics descriptions loaded successfully")
+		mod:info("Mechanics descriptions loaded successfully")
 	else
-		mod:error("❌ Failed to load mechanics descriptions: " .. tostring(result))
+		mod:error("Failed to load mechanics descriptions: " .. tostring(result))
 		ingame_descriptions = {}
 	end
 end
@@ -679,22 +640,17 @@ local safe_setup_tab = function(self, ...)
 	end
 end
 
---[+ ++ИНИЦИАЛИЗАЦИЯ ЦВЕТОВ И ОПИСАНИЙ++ +]--
-local function initialize_mod()
-	load_color_files()
-	load_mechanics_descriptions()
-	mod:info("xsSplained initialization complete")
-end
-
 --[+ ++ОБРАБОТЧИКИ СОБЫТИЙ++ +]--
 mod:hook_safe(CLASS.InventoryBackgroundView, "_setup_top_panel", safe_setup_tab)
 
 mod.on_all_mods_loaded = function()
-	initialize_mod()
+	load_mechanics_descriptions()
+	mod:info("xsSplained initialization complete")
 end
 
 mod.on_enabled = function()
-	initialize_mod()
+	load_mechanics_descriptions()
+	mod:info("xsSplained initialization complete")
 end
 
 mod.on_unload = function()

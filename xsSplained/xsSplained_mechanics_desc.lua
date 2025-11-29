@@ -1,32 +1,5 @@
-
 -- xsSplained_mechanics_desc.lua
 local mod = get_mod("xsSplained")
-
---[+ ++ЗАГРУЗКА ЦВЕТОВЫХ ФАЙЛОВ++ +]--
-local xss_KWords, xss_Numbers, xss_KWords_ru
-
-local function load_colors_for_descriptions()
-	local success_kwords, result_kwords = pcall(function()
-		return mod:io_dofile("xsSplained/Colors_Keywords_Numbers/xss_KWords")
-	end)
-	
-	local success_numbers, result_numbers = pcall(function()
-		return mod:io_dofile("xsSplained/Colors_Keywords_Numbers/xss_Numbers")
-	end)
-	
-	local success_kwords_ru, result_kwords_ru = pcall(function()
-		return mod:io_dofile("xsSplained/Colors_Keywords_Numbers/xss_KWords_ru")
-	end)
-	
-	xss_KWords = success_kwords and result_kwords or {}
-	xss_Numbers = success_numbers and result_numbers or {}
-	xss_KWords_ru = success_kwords_ru and result_kwords_ru or {}
-	
-	return success_kwords and success_numbers
-end
-
--- Загружаем цвета при инициализации файла
-load_colors_for_descriptions()
 
 local ingame_descriptions = {
 	strength_ingame_description = {
@@ -143,7 +116,7 @@ local ingame_descriptions = {
 	toughness_ingame_description = {
 		en = "TOUGHNESS - your personal damage-absorbing shield that protects your Health from most attacks.\n"
 			.."\n"
-			.."Unlike Health, Toughness can regenerate during combat.\n"
+			.."Unlike Health, Toughness can be gained during combat.\n"
 			.."\n"
 			.."Damage Mitigation:\n"
 			.."   1. Ranged Attacks: Toughness blocks 100% of ranged damage until depleted.\n"
