@@ -3,13 +3,13 @@ local mod = get_mod("xsSplained")
 
 local localization = {
 	mod_name = {
-		en = "Game Mechanics Explained",
+		en = "Game Mechanics xsSplained",
 		ru = "Объяснение игровых механик",
 		["zh-cn"] = "游戏机制详解",
 	},
 	mod_description = {
 		en = "Adds a detailed page with comprehensive game mechanics explanations.",
-		ru = "Game Mechanics Explained - Добавляет страницу с детальным объяснением игровых механик.",
+		ru = "Game Mechanics xsSplained - Добавляет страницу с детальным объяснением игровых механик.",
 		["zh-cn"] = "添加包含全面游戏机制说明的详细页面。",
 	},
 

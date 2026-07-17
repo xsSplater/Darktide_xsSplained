@@ -7,6 +7,36 @@ local UIFontSettings = require("scripts/managers/ui/ui_font_settings")
 local ButtonPassTemplates = require("scripts/ui/pass_templates/button_pass_templates")
 local UISoundEvents = require("scripts/settings/ui/ui_sound_events")
 
+-- Безопасная загрузка цветовых утилит с fallback
+local function safe_load_color_utils()
+	local success, ColorUtils = pcall(function()
+		return mod:io_dofile("xsSplained/xsSplained_color_utils")
+	end)
+	if success and ColorUtils then
+		return ColorUtils
+	end
+	mod:warning("Failed to load xsSplained_color_utils, using fallback (no colors)")
+	return {
+		CKWord = function(fallback) return fallback end,
+		CNumb = function(fallback) return fallback end,
+		CPhrs = function() return "" end,
+		CNote = function() return "" end,
+		DOT_NC = "•",
+		DOT_RED = "•",
+		DOT_GREEN = "•",
+	}
+end
+
+local ColorUtils = safe_load_color_utils()
+mod.color_utils = ColorUtils -- сохраняем для доступа из других файлов
+
+local CKWord = ColorUtils.CKWord
+local CNumb = ColorUtils.CNumb
+local CPhrs = ColorUtils.CPhrs
+local CNote = ColorUtils.CNote
+local Dot_nc = ColorUtils.DOT_NC
+local Dot_red = ColorUtils.DOT_RED
+local Dot_green = ColorUtils.DOT_GREEN
 
 --[+ ++ЗАГРУЗКА ОПИСАНИЙ МЕХАНИК++ +]--
 local ingame_descriptions = {}
@@ -15,10 +45,10 @@ local function load_mechanics_descriptions()
 	local success, result = pcall(function()
 		return mod:io_dofile("xsSplained/xsSplained_mechanics_desc")
 	end)
-	
+
 	if success and result then
 		ingame_descriptions = result
-		mod:info("Mechanics descriptions loaded successfully")
+		mod:info("Mechanics descriptions loaded successfully with color support")
 	else
 		mod:error("Failed to load mechanics descriptions: " .. tostring(result))
 		ingame_descriptions = {}
@@ -50,11 +80,11 @@ local CONFIG = {
 			POSITION = { x = 122, y = 22 },
 			PADDING = { x = 30, y = 20 },
 			TEXT_STYLE = {
-				font_size = 24,
+				font_size = 20,	 -- было 24
 				font_type = "proxima_nova_bold",
 				text_color = { 255, 255, 255, 255 },
 				offset = { 30, 20, 1 },
-				size_addition = { -60, -40 },
+				size_addition = { -30, -40 }, -- было { -60, -40 }
 				text_vertical_alignment = "top",
 				text_horizontal_alignment = "left",
 				drop_shadow = true,
@@ -113,6 +143,7 @@ local reset_ui_state = function()
 	UIState.buttons = {}
 	UIState.current_selected_idx = nil
 	UIState.description_widget = nil
+	UIState.is_initialized = false
 end
 
 --[+ ++СПИСОК МЕХАНИК++ +]--
@@ -214,21 +245,28 @@ SimpleAnimations.start_animation = function(widget, target_alpha, duration, dela
 end
 
 SimpleAnimations.update_animations = function(dt)
-	local current_time = Managers.time:time("main")
+	local current_time = Managers.time and Managers.time:time("main")
+	if not current_time then return end -- защита
+
 	local to_remove = {}
-	
+
 	for id, animation in pairs(SimpleAnimations.active_animations) do
+		local widget = animation.widget
+		-- Пропустить, если виджет уничтожен
+		if not widget or not widget.alpha then
+			table.insert(to_remove, id)
+			goto continue
+		end
+		
 		local elapsed = current_time - animation.start_time
 		
-		-- Обработка задержки
 		if elapsed < animation.delay then
 			animation.progress = 0
 		else
 			local animation_elapsed = elapsed - animation.delay
 			animation.progress = math.min(animation_elapsed / animation.duration, 1.0)
-			
 			if animation.progress >= 0 then
-				animation.widget.alpha = math.lerp(animation.start_alpha, animation.target_alpha, animation.progress)
+				widget.alpha = math.lerp(animation.start_alpha, animation.target_alpha, animation.progress)
 			end
 		end
 		
@@ -238,6 +276,7 @@ SimpleAnimations.update_animations = function(dt)
 			end
 			table.insert(to_remove, id)
 		end
+		::continue::
 	end
 	
 	for _, id in ipairs(to_remove) do
@@ -245,8 +284,12 @@ SimpleAnimations.update_animations = function(dt)
 	end
 end
 
-SimpleAnimations.stop_animation = function(animation_id)
-	SimpleAnimations.active_animations[animation_id] = nil
+SimpleAnimations.stop_animations_for_widget = function(widget)
+	for id, anim in pairs(SimpleAnimations.active_animations) do
+		if anim.widget == widget then
+			SimpleAnimations.active_animations[id] = nil
+		end
+	end
 end
 
 SimpleAnimations.stop_all_animations = function()
@@ -271,6 +314,10 @@ local show_description = function(idx)
 			)
 		end
 		UIState.current_selected_idx = nil
+		-- Сброс выделения со всех кнопок
+		for i, button in pairs(UIState.buttons) do
+			button.content.is_active = false
+		end
 		return 
 	end
 
@@ -297,7 +344,7 @@ local show_description = function(idx)
 			UIState.description_widget.alpha = 1
 		end
 		
-		-- Обновить состояние кнопок
+		-- Обновление состояния кнопок
 		for i, button in pairs(UIState.buttons) do
 			button.content.is_active = (i == idx)
 		end
@@ -360,6 +407,7 @@ mod:hook_require("scripts/ui/views/inventory_view/inventory_view_content_bluepri
 					size = { 35, 35 },
 					offset = { 5, 0, 0 },
 					color = { 30, 110, 250, 0 },
+					hover_color = Color.terminal_corner_selected(nil, true),
 				},
 			},
 			{
@@ -371,6 +419,7 @@ mod:hook_require("scripts/ui/views/inventory_view/inventory_view_content_bluepri
 					size = { 35, 35 },
 					offset = { -5, 0, 0 },
 					color = { 30, 110, 250, 0 },
+					hover_color = Color.terminal_corner_selected(nil, true),
 				},
 			},
 			{
@@ -395,7 +444,7 @@ mod:hook_require("scripts/ui/views/inventory_view/inventory_view_content_bluepri
 					hover_color = Color.terminal_corner_selected(nil, true),
 					offset = { 0, 0, 4 },
 				},
-				change_function = terminal_button_change_function,
+				-- change_function = terminal_button_change_function,
 				visibility_function = ButtonPassTemplates.list_button_focused_visibility_function,
 			},
 			{
@@ -419,6 +468,55 @@ mod:hook_require("scripts/ui/views/inventory_view/inventory_view_content_bluepri
 					style.color[1] = content.hotspot.is_hover and 120 or 0
 				end
 			},
+			-- Стрелка справа
+			{
+				pass_type = "texture",
+				style_id = "arrow",
+				value = "content/ui/materials/buttons/arrow_01",
+				style = {
+					horizontal_alignment = "right",
+					vertical_alignment = "center",
+					size = { 12, 18 },
+					base_size = { 12, 18 },	  -- для восстановления размера
+					color = Color.terminal_icon(255, true),
+					default_color = Color.terminal_icon(255, true),
+					hover_color = Color.terminal_text_header_selected(255, true),
+					active_color = Color.terminal_corner_selected(255, true),  -- цвет выделенной механики
+					offset = { -15, 0, 5 },
+				},
+				change_function = function (content, style)
+					local hotspot = content.hotspot
+					local hover_progress = math.max(hotspot.anim_hover_progress or 0, hotspot.anim_focus_progress or 0)
+					local input_progress = hotspot.anim_input_progress or 0
+					local is_active = content.is_active or false
+
+					-- Смещение: для активной кнопки - фиксированное выдвижение
+					local base_offset = -15
+					if is_active then
+						style.offset[1] = base_offset + 25
+					else
+						style.offset[1] = base_offset + 25 * hover_progress
+					end
+
+					-- Размер: временное увеличение при клике
+					local base_size = style.base_size or {12, 18}
+					local click_scale = 1 + 0.5 * input_progress
+					style.size[1] = base_size[1] * click_scale
+					style.size[2] = base_size[2] * click_scale
+
+					-- Цвет: активная -> active_color, иначе hover_progress между default и hover
+					local default_color = style.default_color
+					local hover_color = style.hover_color
+					local active_color = style.active_color or hover_color
+					local target_color = is_active and active_color or hover_color
+					local color_progress = is_active and 1 or hover_progress
+					local color = style.color
+					for i = 1, 4 do
+						color[i] = default_color[i] + (target_color[i] - default_color[i]) * color_progress
+					end
+				end
+			},
+			-- Подсветка активной кнопки
 			{
 				pass_type = "rect",
 				style_id = "active_highlight",
@@ -470,6 +568,7 @@ mod:hook_require("scripts/ui/views/inventory_view/inventory_view_content_bluepri
 			end
 		end,
 		destroy = function(parent, widget, element, ui_renderer)
+			SimpleAnimations.stop_animations_for_widget(widget)
 			if widget.mechanics_idx then
 				UIState.buttons[widget.mechanics_idx] = nil
 			end
@@ -551,6 +650,7 @@ mod:hook_require("scripts/ui/views/inventory_view/inventory_view_content_bluepri
 			UIState.description_widget = widget
 		end,
 		destroy = function(parent, widget, element, ui_renderer)
+			SimpleAnimations.stop_animations_for_widget(widget)
 			UIState.description_widget = nil
 			UIState.current_selected_idx = nil
 		end,
@@ -630,11 +730,10 @@ local safe_setup_tab = function(self, ...)
 
 		self._top_panel:add_entry(mechanics_tab.display_name, cb, mechanics_tab.update)
 		
-		UIState.is_initialized = true
 		mod:info("xsSplained tab initialized successfully with " .. num_buttons .. " mechanics")
 		
 	end)
-	
+
 	if not success then
 		mod:error("Failed to setup xsSplained tab: " .. tostring(error_msg))
 	end
